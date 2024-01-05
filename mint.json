@@ -26,10 +26,7 @@
     "url": "https://dashboard.mintlify.com"
   },
   "tabs": [
-    {
-      "name": "API Reference",
-      "url": "api-reference"
-    }
+    
   ],
   "anchors": [
     {
@@ -49,26 +46,97 @@
     }
   ],
   "navigation": [
+   
     {
-      "group": "Get Started",
-      "pages": ["introduction", "quickstart", "development"]
+      "group": "Getting Started",
+      "pages": [
+        "Getting_Started/introduction", 
+        "Getting_Started/vision_and_purpose", 
+        "Getting_Started/Why_chose_imagine", 
+        "Getting_Started/Account_creation_and_setup",
+        "Getting_Started/Basic_navigation_and_interface_overview"]
     },
+
+    {
+      "group": "Research",
+      "pages": [
+        "Research/Overview", 
+        "Research/Legal_Research", 
+        "Research/Technical_Research", 
+        "Research/Creative_Process_Research", 
+        "Research/User_Experience_Research", 
+        "Research/Ethical_Considerations"]
+    },
+
+    {
+      "group": "Features",
+      "pages": [
+        "Features/Advanced_Ai_Art", 
+        "Features/Human_input_logger", 
+        "Features/Degree_of_involvement_metric", 
+        "Features/Secure_marketplace", 
+        "Features/Artwork_licensing"]
+    },
+
+    {
+      "group": "Community and Collaboration",
+      "pages": [
+        "Community/how_to_engage_with_the_community", 
+        "Community/collaboration_tools", 
+        "Community/community_guidelines"]
+    },
+
+
+    {
+      "group": "Marketplace",
+      "pages": [
+        "Marketplace/Buying_and_selling_artworks", 
+        "Marketplace/Marketplace_rules_and_guidelines", 
+        "Marketplace/Pricing_and_bidding_system"]
+    },
+
+    {
+      "group": "Legal and Compliance",
+      "pages": [
+        "Legal/Copyright_laws_and_Ai_generated_content", 
+        "Legal/User_rights_and_responsibilities", 
+        "Legal/Licensing_and_intellectual_property"]
+    },
+
+
+    {
+      "group": "Troubleshooting and FAQs",
+      "pages": [
+        "Troubleshooting/Common_issues_and_solutions", 
+        "Troubleshooting/Frequently_asked_questions", 
+        "Troubleshooting/Contacting_support"]
+    },
+
+    {
+      "group": "Updates and Changelog",
+      "pages": [
+        "Changelog/Information_about_recent_updates", 
+        "Changelog/Historical_changelog"]
+    },
+
+    {
+      "group": "Feedback and Suggestions",
+      "pages": [
+        "Feedback/How_to_provide_feedback", 
+        "Feedback/Submitting_feature_requests_and_suggestions"]
+    },
+
     {
       "group": "Essentials",
-      "pages": ["essentials/markdown", "essentials/code", "essentials/images", "essentials/settings", "essentials/navigation"]
-    },
-    {
-      "group": "API Documentation",
-      "pages": ["api-reference/introduction"]
-    },
-    {
-      "group": "Endpoint Examples",
       "pages": [
-        "api-reference/endpoint/get",
-        "api-reference/endpoint/create",
-        "api-reference/endpoint/delete"
-      ]
+        "essentials/markdown", 
+        "essentials/code", 
+        "essentials/images", 
+        "essentials/settings", 
+        "essentials/navigation"]
     }
+   
+    
   ],
   "footerSocials": {
     "twitter": "https://twitter.com/mintlify",
