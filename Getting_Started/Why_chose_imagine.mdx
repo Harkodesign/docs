@@ -4,96 +4,34 @@ description: 'Learn how to preview changes locally'
 icon: 'star-of-life'
 ---
 
-<Info>
-  **Prerequisite** You should have installed Node.js (version 18.10.0 or
-  higher).
-</Info>
 
-Step 1. Install Mintlify on your OS:
+<img
+  className="block dark:hidden"
+  src="/images/hero-light.svg"
+  alt="Hero Light"
+/>
+<img
+  className="hidden dark:block"
+  src="/images/hero-dark.svg"
+  alt="Hero Dark"
+/>
 
-<CodeGroup>
+## Unleashing Creativity with AI
 
-```bash npm
-npm i -g mintlify
-```
+- **Innovative Tools:** 'Imagine' offers state-of-the-art AI tools that revolutionize the art creation process, allowing artists to push the boundaries of traditional and digital art.
 
-```bash yarn
-yarn global add mintlify
-```
+## Community and Collaboration
 
-</CodeGroup>
+- **Vibrant Community:** Join a diverse community of artists and enthusiasts, fostering collaboration, inspiration, and shared growth.
 
-Step 2. Go to the docs are located (where you can find `mint.json`) and run the following command:
+## User-Centric Platform
 
-```bash
-mintlify dev
-```
+- **Intuitive Interface:** Designed for artists of all skill levels, 'Imagine's user-friendly interface makes navigating AI art creation accessible and enjoyable.
 
-The documentation website is now available at `http://localhost:3000`.
+Choosing 'Imagine' means embracing a platform where innovation, community, and user experience converge, redefining the possibilities of art creation in the digital age.
 
-### Custom Ports
 
-Mintlify uses port 3000 by default. You can use the `--port` flag to customize the port Mintlify runs on. For example, use this command to run in port 3333:
 
-```bash
-mintlify dev --port 3333
-```
 
-You will see an error like this if you try to run Mintlify in a port that's already taken:
 
-```md
-Error: listen EADDRINUSE: address already in use :::3000
-```
 
-## Mintlify Versions
-
-Each CLI is linked to a specific version of Mintlify. Please update the CLI if your local website looks different than production.
-
-<CodeGroup>
-
-```bash npm
-npm i -g mintlify@latest
-```
-
-```bash yarn
-yarn global upgrade mintlify
-```
-
-</CodeGroup>
-
-## Deployment
-
-<Tip>
-  Unlimited editors available under the [Startup
-  Plan](https://mintlify.com/pricing)
-</Tip>
-
-You should see the following if the deploy successfully went through:
-
-<Frame>
-  <img src="/images/checks-passed.png" style={{ borderRadius: '0.5rem' }} />
-</Frame>
-
-## Troubleshooting
-
-Here's how to solve some common problems when working with the CLI.
-
-<AccordionGroup>
-  <Accordion title="Mintlify is not loading">
-    Update to Node v18. Run `mintlify install` and try again.
-  </Accordion>
-  <Accordion title="No such file or directory on Windows">
-Go to the `C:/Users/Username/.mintlify/` directory and remove the `mint`
-folder. Then Open the Git Bash in this location and run `git clone
-https://github.com/mintlify/mint.git`.
-
-Repeat step 3.
-
-  </Accordion>
-  <Accordion title="Getting an unknown error">
-    Try navigating to the root of your device and delete the ~/.mintlify folder.
-    Then run `mintlify dev` again.
-  </Accordion>
-</AccordionGroup>
-
-Curious about what changed in a CLI version? [Check out the CLI changelog.](/changelog/command-line)
