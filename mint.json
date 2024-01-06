@@ -57,6 +57,7 @@
         "Getting_Started/Basic_navigation_and_interface_overview"]
     },
 
+
     {
       "group": "Research",
       "pages": [
@@ -124,16 +125,6 @@
       "pages": [
         "Feedback/How_to_provide_feedback", 
         "Feedback/Submitting_feature_requests_and_suggestions"]
-    },
-
-    {
-      "group": "Essentials",
-      "pages": [
-        "essentials/markdown", 
-        "essentials/code", 
-        "essentials/images", 
-        "essentials/settings", 
-        "essentials/navigation"]
     }
    
     
