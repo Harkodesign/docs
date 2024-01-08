@@ -5,16 +5,36 @@
     "dark": "/logo/dark.svg",
     "light": "/logo/light.svg"
   },
+
   "favicon": "/Favicon.svg",
   "colors": {
-    "primary": "#CC3A6B",
-    "light": "#FF4D88",
-    "dark": "#CC3A6B",
+    
+    "background": {
+        "light": "#f5efe5"
+       
+    },
+
+    "primary": "#FF4C00",
+    "light": "#FF4C00",
+    "dark": "#FF4C00",
+    
     "anchors": {
-      "from": "#CC3A6B",
+      "from": "#FF4C00",
       "to": "#FF4D88"
     }
   },
+
+
+"topbarLinks": [
+  {
+    "name": "Community",
+    "url": "mailto:hi@mintlify.com"
+  }
+],
+"topbarCtaButton": {
+  "name": "Get Started",
+  "url": "https://dashboard.mintlify.com"
+},
   
  
   "tabs": [
