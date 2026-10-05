@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  actions: read  # to list the saved-memory caches
 
 concurrency:
   group: alphaone
@@ -22,27 +23,78 @@ jobs:
   briefing:
     runs-on: ubuntu-latest
     timeout-minutes: 50
+    env:
+      # Runs started by hand on any branch but the default one are always dry runs: memory saved
+      # there is invisible to the scheduled runs, which would then send the same stories again.
+      DRY_RUN: ${{ inputs.dry_run || (github.event_name != 'schedule' && github.ref_name != github.event.repository.default_branch) }}
     defaults:
       run:
         working-directory: alphaone
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - name: Check secrets
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          NEEDS_SMTP: ${{ env.DRY_RUN != 'true' }}
+        run: |
+          required="ANTHROPIC_API_KEY"
+          if [ "$NEEDS_SMTP" = true ]; then required="$required SMTP_USERNAME SMTP_PASSWORD"; fi
+          missing=""
+          for name in $required; do [ -n "${!name}" ] || missing="$missing $name"; done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing (Settings > Secrets and variables > Actions)"
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: alphaone/requirements.txt
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements.txt pytest==9.1.1
+
+      - name: Self-test
+        # The offline tests take seconds and call no API, so a broken commit fails here, before any
+        # spend. Repository checks (README, workflow wiring) run locally, not in the hourly gate.
+        run: python -m pytest -q -m "not repo"
 
       - name: Restore ALPHAONE's memory
-        uses: actions/cache/restore@v4
+        id: memory
+        uses: actions/cache/restore@v6
         with:
           path: alphaone/.state
-          key: alphaone-state-${{ github.run_id }}
+          # This key never exists yet (the cache action also prefix-matches it), so the
+          # restore always falls through to the newest saved memory.
+          key: alphaone-state-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: alphaone-state-
+
+      - name: Make sure no saved memory was missed
+        # The cache action reports a cache-service error as an ordinary miss. Starting from blank
+        # memory would resend the last day's stories as issue #1 and then hide the real memory.
+        if: steps.memory.outputs.cache-matched-key == ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_REF: refs/heads/${{ github.event.repository.default_branch }}
+        run: |
+          for ref in "$GITHUB_REF" "$DEFAULT_REF"; do
+            # Assigned outside a test, so a failing API call fails this step too.
+            created=$(gh cache list --repo "$GITHUB_REPOSITORY" --ref "$ref" --key alphaone-state- \
+              --sort created_at --limit 1 --json createdAt --jq '.[].createdAt')
+            # Only a recent save counts, so if a newer cache action ever can't read older saves,
+            # the memory starts over after a few skipped hours instead of never.
+            if [ -n "$created" ] && [ $(( $(date +%s) - $(date -d "$created" +%s) )) -lt 21600 ]; then
+              echo "::error::Memory saved at $created couldn't be restored; skipping this hour rather than starting over"
+              exit 1
+            fi
+          done
+          echo "No recent saved memory: starting fresh."
 
       - name: Run ALPHAONE
         env:
@@ -52,26 +104,60 @@ jobs:
           SMTP_HOST: ${{ vars.SMTP_HOST }}
           SMTP_PORT: ${{ vars.SMTP_PORT }}
           ALPHAONE_TO: ${{ vars.ALPHAONE_TO }}
+          ALPHAONE_FROM: ${{ vars.ALPHAONE_FROM }}
           ALPHAONE_MODEL: ${{ vars.ALPHAONE_MODEL }}
           ALPHAONE_EFFORT: ${{ vars.ALPHAONE_EFFORT }}
+          ALPHAONE_EDITOR_EFFORT: ${{ vars.ALPHAONE_EDITOR_EFFORT }}
           ALPHAONE_TIMEZONE: ${{ vars.ALPHAONE_TIMEZONE }}
           ALPHAONE_SKIP_QUIET: ${{ vars.ALPHAONE_SKIP_QUIET }}
           ALPHAONE_MAX_SEARCHES: ${{ vars.ALPHAONE_MAX_SEARCHES }}
           ALPHAONE_MAX_FETCHES: ${{ vars.ALPHAONE_MAX_FETCHES }}
-        run: python main.py ${{ inputs.dry_run && '--dry-run' || '' }}
+          ALPHAONE_FETCH_MAX_TOKENS: ${{ vars.ALPHAONE_FETCH_MAX_TOKENS }}
+          ALPHAONE_LOOKBACK_HOURS: ${{ vars.ALPHAONE_LOOKBACK_HOURS }}
+          ALPHAONE_PAPER_LOOKBACK_HOURS: ${{ vars.ALPHAONE_PAPER_LOOKBACK_HOURS }}
+          ALPHAONE_MAX_NEWS: ${{ vars.ALPHAONE_MAX_NEWS }}
+          ALPHAONE_MAX_PAPERS: ${{ vars.ALPHAONE_MAX_PAPERS }}
+        run: python main.py ${{ env.DRY_RUN == 'true' && '--dry-run' || '' }}
 
       - name: Save ALPHAONE's memory
-        if: success() && !inputs.dry_run
-        uses: actions/cache/save@v4
+        # Also after a failure: the memory on disk is either the one restored above or one
+        # ALPHAONE saved on purpose (e.g. after an email went out), so it is always safe to keep.
+        if: ${{ !cancelled() && env.DRY_RUN != 'true' }}
+        uses: actions/cache/save@v6
         with:
           path: alphaone/.state
           key: alphaone-state-${{ github.run_id }}-${{ github.run_attempt }}
 
+      # Logs and artifacts of a public repo are readable by any signed-in GitHub user, and a
+      # sent issue is already in your inbox, so keep a copy only for dry runs and failed runs.
       - name: Keep a copy of this issue
-        if: always()
-        uses: actions/upload-artifact@v4
+        if: env.DRY_RUN == 'true' || failure()
+        uses: actions/upload-artifact@v7
         with:
           name: alphaone-issue-${{ github.run_id }}-${{ github.run_attempt }}
           path: alphaone/out/
           retention-days: 7
           if-no-files-found: ignore
+
+  keepalive:
+    # In a public repo GitHub disables scheduled workflows after 60 days without a commit.
+    # Re-enabling this (still active) workflow after each good scheduled run resets that clock.
+    needs: briefing
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Keep the hourly schedule alive
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW: repos/${{ github.repository }}/actions/workflows/alphaone.yml
+        run: |
+          state=$(gh api "$WORKFLOW" --jq .state)
+          # Never undo a manual "Disable workflow" clicked while this run was in progress.
+          if [ "$state" = active ]; then
+            gh api -X PUT "$WORKFLOW/enable"
+          else
+            echo "Workflow is $state; leaving it as it is."
+          fi

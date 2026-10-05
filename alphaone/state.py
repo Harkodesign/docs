@@ -32,7 +32,7 @@ class State:
             log.info("no saved memory at %s - starting fresh", path)
             return cls()
         try:
-            raw = json.loads(path.read_text())
+            raw = json.loads(path.read_text(encoding="utf-8"))
             return cls(
                 seen=dict(raw.get("seen", {})),
                 covered=list(raw.get("covered", [])),
@@ -46,23 +46,22 @@ class State:
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(self.__dict__, indent=1, sort_keys=True))
+        tmp.write_text(json.dumps(self.__dict__, indent=1, sort_keys=True), encoding="utf-8")
         tmp.replace(path)
 
     def seen_keys(self) -> set[str]:
         return set(self.seen)
 
     def recent_headlines(self) -> list[str]:
-        return [entry["headline"] for entry in self.covered]
+        return [f"{entry['headline']} (sent {entry.get('at', '')[:16].replace('T', ' ')} UTC)" for entry in self.covered]
 
     def record_run(self, now: datetime, considered_keys: list[str], covered: list[dict], sent: bool) -> None:
         stamp = now.isoformat()
         for key in considered_keys:
             self.seen.setdefault(key, stamp)
-        for entry in covered:
-            self.covered.append({"at": stamp, **entry})
-        self.last_run = stamp
-        if sent:
+        if sent:  # an issue that wasn't sent reached nobody: it covers nothing and isn't a briefing
+            self.covered += [{"at": stamp, **entry} for entry in covered]
+            self.last_run = stamp
             self.issue_number += 1
         self.prune(now)
 

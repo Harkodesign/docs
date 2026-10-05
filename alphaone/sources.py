@@ -8,6 +8,7 @@ that fails to load is logged and skipped, it never breaks a run.
 
 from __future__ import annotations
 
+import gzip
 import html
 import json
 import logging
@@ -30,14 +31,17 @@ TIMEOUT_SECONDS = 20
 # Official blogs of the big AI companies and labs.
 COMPANY_FEEDS: dict[str, str] = {
     "OpenAI": "https://openai.com/news/rss.xml",
+    # Anthropic publishes no feed; this community mirror of anthropic.com/news updates hourly.
+    "Anthropic (unofficial feed)": "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_news.xml",
     "Google DeepMind": "https://deepmind.google/blog/rss.xml",
-    "Google AI (The Keyword)": "https://blog.google/technology/ai/rss/",
+    "Google AI (The Keyword)": "https://blog.google/innovation-and-ai/technology/ai/rss/",
     "Google Research": "https://research.google/blog/rss/",
-    "Microsoft AI Blog": "https://blogs.microsoft.com/ai/feed/",
+    "Microsoft News": "https://news.microsoft.com/source/feed/",
     "Microsoft Research": "https://www.microsoft.com/en-us/research/feed/",
     "NVIDIA Blog": "https://blogs.nvidia.com/feed/",
     "AWS Machine Learning": "https://aws.amazon.com/blogs/machine-learning/feed/",
     "Apple Machine Learning": "https://machinelearning.apple.com/rss.xml",
+    "Mistral AI": "https://mistral.ai/rss.xml",
     "Hugging Face": "https://huggingface.co/blog/feed.xml",
 }
 
@@ -45,28 +49,32 @@ COMPANY_FEEDS: dict[str, str] = {
 PRESS_FEEDS: dict[str, str] = {
     "TechCrunch AI": "https://techcrunch.com/category/artificial-intelligence/feed/",
     "The Verge AI": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
-    "VentureBeat AI": "https://venturebeat.com/category/ai/feed/",
     "MIT Technology Review AI": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
     "Ars Technica AI": "https://arstechnica.com/ai/feed/",
     "Wired AI": "https://www.wired.com/feed/tag/ai/latest/rss",
+    "Simon Willison": "https://simonwillison.net/atom/everything/",
 }
 
 # Google News searches catch companies that don't publish an RSS feed
-# (Anthropic, Meta, xAI, Mistral, ...) and coverage from any outlet.
+# (Meta, xAI, the Chinese labs, ...) and coverage from any outlet.
+# In Google News, OR binds tighter than the implicit AND between words.
 NEWS_SEARCHES: dict[str, str] = {
     "OpenAI": '"OpenAI" OR ChatGPT',
     "Anthropic": '"Anthropic" OR "Claude AI"',
     "Google": '"Google DeepMind" OR "Google Gemini"',
-    "Meta": '"Meta AI" OR "Llama" model OR "Meta Superintelligence"',
+    "Meta": '"Meta AI" OR "Meta Superintelligence" OR Llama Meta',
     "Microsoft": '"Microsoft" AI Copilot OR "Microsoft AI"',
     "NVIDIA": "NVIDIA AI chips OR GPU OR model",
     "Apple": '"Apple Intelligence" OR "Apple" AI model',
     "Amazon": '"Amazon" AI OR "AWS" Bedrock OR Nova model',
     "xAI": '"xAI" OR Grok',
     "Mistral": '"Mistral AI"',
-    "Chinese labs": "DeepSeek OR Qwen OR Moonshot Kimi OR Zhipu AI model",
+    "Chinese labs": 'DeepSeek OR Qwen OR "Moonshot AI" OR Zhipu OR MiniMax',
     "AI policy": "AI regulation OR \"AI Act\" OR \"AI safety\" law",
 }
+
+# News ranking: official posts first, then the press, then Google News.
+COMPANY_TIER, PRESS_TIER = 2, 1
 
 ARXIV_QUERY = "cat:cs.AI OR cat:cs.CL OR cat:cs.LG OR cat:cs.CV"
 ARXIV_URL = (
@@ -97,7 +105,7 @@ class Item:
     published: datetime | None
     summary: str = ""
     extra: str = ""
-    score: int = 0  # e.g. Hugging Face upvotes; used to rank papers
+    score: int = 0  # ranking weight: Hugging Face upvotes for papers, source tier for news
 
     @property
     def key(self) -> str:
@@ -109,6 +117,9 @@ class Item:
         if self.extra:
             parts[-1] += f" | {self.extra}"
         parts.append(f"    url: {self.url}")
+        match = _ARXIV_ID.search(self.url) if self.kind == "paper" else None
+        if match:  # web fetch only opens URLs already in the conversation, so list the full text too
+            parts.append(f"    full text: https://arxiv.org/html/{match.group(1)}")
         if self.summary:
             parts.append(f"    snippet: {self.summary}")
         return "\n".join(parts)
@@ -125,10 +136,14 @@ def item_key(url: str, title: str = "") -> str:
 
 
 def normalize_url(url: str) -> str:
-    parts = urlsplit(url.strip())
+    try:
+        parts = urlsplit(url.strip())
+    except ValueError:  # e.g. a malformed [IPv6] host; select_new runs outside the per-feed guard
+        return url.strip()
     query = urlencode([(k, v) for k, v in parse_qsl(parts.query) if not _TRACKING_PARAMS.match(k)])
     path = parts.path.rstrip("/") or "/"
-    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), path, query, ""))
+    fragment = parts.fragment if parts.fragment.startswith(("/", "!")) else ""  # keep #/ and #! routes
+    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), path, query, fragment))
 
 
 def clean_text(raw: str, limit: int = 320) -> str:
@@ -157,16 +172,25 @@ def _parse_time(value) -> datetime | None:
 
 
 def _http_get(url: str) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept-Encoding": "gzip"})
     with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-        return response.read()
+        data = response.read()
+    # Some CDNs (deepmind.google) send gzip even when it wasn't asked for, and urllib doesn't unzip.
+    return gzip.decompress(data) if data[:2] == b"\x1f\x8b" else data
 
 
 # ---------------------------------------------------------------- parsers
 
 
-def parse_feed(data: bytes, source: str, kind: str = "news") -> list[Item]:
+def _parse_xml_feed(data: bytes):
     feed = feedparser.parse(data)
+    if not feed.get("version") and not feed.entries:  # a bot wall or error page, not an empty feed
+        raise ValueError(f"not an RSS/Atom feed ({len(data)} bytes)")
+    return feed
+
+
+def parse_feed(data: bytes, source: str, kind: str = "news", score: int = 0) -> list[Item]:
+    feed = _parse_xml_feed(data)
     items = []
     for entry in feed.entries:
         title = clean_text(entry.get("title", ""), limit=240)
@@ -175,17 +199,22 @@ def parse_feed(data: bytes, source: str, kind: str = "news") -> list[Item]:
             continue
         published = _parse_time(entry.get("published_parsed") or entry.get("updated_parsed"))
         summary = clean_text(entry.get("summary", ""))
+        if summary.startswith(title.rsplit(" - ", 1)[0]) and len(summary) < len(title) + 40:
+            summary = ""  # the snippet only repeats the title (all Google News items do this)
         publisher = (entry.get("source") or {}).get("title", "")
         label = f"{source} via {publisher}" if publisher and publisher not in source else source
-        items.append(Item(kind=kind, source=label, title=title, url=url, published=published, summary=summary))
+        items.append(
+            Item(kind=kind, source=label, title=title, url=url, published=published, summary=summary, score=score)
+        )
     return items
 
 
 def parse_arxiv(data: bytes) -> list[Item]:
-    feed = feedparser.parse(data)
+    feed = _parse_xml_feed(data)
     items = []
     for entry in feed.entries:
-        url = entry.get("id") or entry.get("link", "")
+        # The Atom id is http://arxiv.org/abs/ID; use https, as the HF items and arXiv's own links do.
+        url = (entry.get("id") or entry.get("link", "")).replace("http://", "https://", 1)
         authors = ", ".join(a.get("name", "") for a in entry.get("authors", [])[:4])
         if len(entry.get("authors", [])) > 4:
             authors += " et al."
@@ -207,22 +236,26 @@ def parse_hf_daily_papers(data: bytes) -> list[Item]:
     items = []
     for entry in json.loads(data):
         paper = entry.get("paper") or {}
+        if not isinstance(paper, dict):
+            continue
         paper_id = paper.get("id") or ""
         title = clean_text(paper.get("title") or entry.get("title") or "", limit=240)
         if not paper_id or not title:
             continue
-        upvotes = int(paper.get("upvotes") or 0)
-        authors = [a.get("name", "") for a in paper.get("authors", [])[:4]]
+        upvotes = paper.get("upvotes")
+        upvotes = upvotes if isinstance(upvotes, int) else 0
+        authors = [a.get("name", "") for a in (paper.get("authors") or [])[:4] if isinstance(a, dict)]
         extra = f"{upvotes} upvotes on Hugging Face"
         if authors:
-            extra += " | " + ", ".join(authors) + (" et al." if len(paper.get("authors", [])) > 4 else "")
+            extra += " | " + ", ".join(authors) + (" et al." if len(paper.get("authors") or []) > 4 else "")
         items.append(
             Item(
                 kind="paper",
                 source="Hugging Face Daily Papers",
                 title=title,
                 url=f"https://arxiv.org/abs/{paper_id}",
-                published=_parse_time(entry.get("publishedAt") or paper.get("publishedAt")),
+                # When it was featured; publishedAt is the arXiv date, often days older.
+                published=_parse_time(paper.get("submittedOnDailyAt") or entry.get("publishedAt")),
                 summary=clean_text(paper.get("summary", ""), limit=400),
                 extra=extra,
                 score=upvotes,
@@ -240,8 +273,9 @@ def google_news_url(query: str) -> str:
 
 def _jobs() -> list[tuple[str, str, Callable[[bytes], list[Item]]]]:
     jobs: list[tuple[str, str, Callable[[bytes], list[Item]]]] = []
-    for name, url in {**COMPANY_FEEDS, **PRESS_FEEDS}.items():
-        jobs.append((name, url, lambda data, n=name: parse_feed(data, n)))
+    for tier, feeds in ((COMPANY_TIER, COMPANY_FEEDS), (PRESS_TIER, PRESS_FEEDS)):
+        for name, url in feeds.items():
+            jobs.append((name, url, lambda data, n=name, t=tier: parse_feed(data, n, score=t)))
     for name, query in NEWS_SEARCHES.items():
         label = f"Google News: {name}"
         jobs.append((label, google_news_url(query), lambda data, n=label: parse_feed(data, n)))
@@ -278,29 +312,41 @@ def select_new(
     lookback_hours: int,
     max_news: int,
     max_papers: int,
+    paper_lookback_hours: int = 96,
 ) -> tuple[list[Item], list[Item]]:
-    """Drop duplicates, already-seen and stale items; rank and cap the rest."""
-    cutoff = now - timedelta(hours=lookback_hours)
+    """Drop duplicates, already-seen and stale items; rank and cap the rest.
+
+    Papers get a longer window: arXiv dates are submission times, and the batch
+    announced on Sunday night is already two days old when it appears.
+    """
+    cutoff = {
+        "news": now - timedelta(hours=lookback_hours),
+        "paper": now - timedelta(hours=paper_lookback_hours),
+    }
     unique: dict[str, Item] = {}
     for item in items:
         if item.key in seen:
             continue
-        if item.published and item.published < cutoff:
+        when = item.published
+        if when and item.kind == "news" and when.time() == datetime.min.time():
+            # Date-only feeds (the Anthropic mirror) stamp every post 00:00 UTC: count the whole
+            # listed day, or a post from late that day expires before it reaches the feed.
+            when += timedelta(days=1)
+        if when and when < cutoff[item.kind]:
             continue
         current = unique.get(item.key)
         # Keep the richer copy when the same link shows up in several feeds.
         if current is None or (item.score, len(item.summary)) > (current.score, len(current.summary)):
             unique[item.key] = item
 
+    # Highest score first (official posts for news, upvotes for papers), then newest.
     oldest = datetime.min.replace(tzinfo=timezone.utc)
-    news = sorted(
-        (i for i in unique.values() if i.kind == "news"),
-        key=lambda i: i.published or oldest,
-        reverse=True,
-    )
-    papers = sorted(
-        (i for i in unique.values() if i.kind == "paper"),
-        key=lambda i: (i.score, i.published or oldest),
-        reverse=True,
-    )
-    return news[:max_news], papers[:max_papers]
+
+    def ranked(kind: str) -> list[Item]:
+        return sorted(
+            (i for i in unique.values() if i.kind == kind),
+            key=lambda i: (i.score, i.published or oldest),
+            reverse=True,
+        )
+
+    return ranked("news")[:max_news], ranked("paper")[:max_papers]

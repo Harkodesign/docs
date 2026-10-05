@@ -7,66 +7,84 @@ turns it into a mobile-friendly HTML email plus a plain-text fallback.
 from __future__ import annotations
 
 import html
+import re
 from dataclasses import dataclass
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AfterValidator, BaseModel, Field
 
 # ---------------------------------------------------------------- schema
 
 
+def _plain(text: str) -> str:
+    """Drop stray Markdown (**bold**, `code`, [text](url), # headings): the email does its own formatting."""
+    text = re.sub(r"\[([^\]]+)\]\(https?://[^)\s]+\)", r"\1", text)
+    text = re.sub(r"(\*\*|`)(.+?)\1", r"\2", text)
+    return re.sub(r"^#{1,6}\s+", "", text.strip())
+
+
+# Prose fields; the JSON schema Claude sees is the same as for str. URLs stay plain str.
+Plain = Annotated[str, AfterValidator(_plain)]
+
+
 class Source(BaseModel):
-    title: str = Field(description="Publisher and title, e.g. 'OpenAI blog: Introducing ...'")
+    title: Plain = Field(description="Publisher and title, e.g. 'OpenAI blog: Introducing ...'")
     url: str = Field(description="Full https URL of the source")
 
 
 class Story(BaseModel):
-    headline: str = Field(description="Clear, specific headline. No clickbait.")
-    company: str = Field(description="Main company or lab involved, e.g. 'OpenAI', 'Google DeepMind'")
-    category: str = Field(
+    headline: Plain = Field(description="Clear, specific headline. No clickbait.")
+    company: Plain = Field(description="Main company or lab involved, e.g. 'OpenAI', 'Google DeepMind'")
+    category: Plain = Field(
         description="One of: Model launch, Product, Research, Funding & deals, Policy & legal, "
         "Hardware & compute, Partnership, People, Safety"
     )
     impact: Literal["high", "medium", "low"] = Field(description="How much this changes the AI landscape")
-    one_liner: str = Field(description="The whole story in one plain-English sentence")
-    what_happened: str = Field(description="2-4 short sentences: the facts, with concrete numbers and dates")
-    why_it_matters: str = Field(description="2-3 sentences on the significance for the industry and for users")
-    details: list[str] = Field(
+    one_liner: Plain = Field(description="The whole story in one plain-English sentence")
+    what_happened: Plain = Field(description="2-4 short sentences: the facts, with concrete numbers and dates")
+    why_it_matters: Plain = Field(description="2-3 sentences on the significance for the industry and for users")
+    details: list[Plain] = Field(
         description="4-8 bullets for the detailed overview: specs, benchmarks, pricing, availability, "
         "quotes, context, competitive picture. Each bullet one idea, plain language."
     )
-    what_to_watch: str = Field(description="One sentence: what to look out for next")
+    what_to_watch: Plain = Field(description="One sentence: what to look out for next")
     sources: list[Source] = Field(description="Primary source first, then the best coverage")
 
 
 class Paper(BaseModel):
-    title: str
-    authors_or_lab: str = Field(description="Lab or company if known, else lead authors")
+    title: Plain
+    authors_or_lab: Plain = Field(description="Lab or company if known, else lead authors")
     url: str = Field(description="Link to the paper (arXiv abs page preferred)")
-    one_liner: str = Field(description="What this paper does, in one sentence a non-expert understands")
-    the_problem: str = Field(description="1-2 sentences: what problem it tackles and why it is hard")
-    the_big_idea: str = Field(
+    one_liner: Plain = Field(description="What this paper does, in one sentence a non-expert understands")
+    the_problem: Plain = Field(description="1-2 sentences: what problem it tackles and why it is hard")
+    the_big_idea: Plain = Field(
         description="2-4 sentences explaining the core idea simply, ideally with an everyday analogy"
     )
-    key_results: list[str] = Field(description="2-5 bullets with the headline results, numbers included")
-    why_it_matters: str = Field(description="1-2 sentences on the practical significance")
-    caveats: str = Field(description="1-2 sentences: limitations, open questions, or reasons for caution")
+    key_results: list[Plain] = Field(description="2-5 bullets with the headline results, numbers included")
+    why_it_matters: Plain = Field(description="1-2 sentences on the practical significance")
+    caveats: Plain = Field(description="1-2 sentences: limitations, open questions, or reasons for caution")
+
+
+class RadarItem(BaseModel):
+    text: Plain = Field(description="One plain-English sentence")
+    url: str = Field(description="Full https URL of the best source, from the dossier")
 
 
 class GlossaryTerm(BaseModel):
-    term: str
-    meaning: str = Field(description="One-sentence plain-English definition")
+    term: Plain
+    meaning: Plain = Field(description="One-sentence plain-English definition")
 
 
 class Newsletter(BaseModel):
-    subject_line: str = Field(description="Email subject: the 1-2 biggest items, under 90 characters")
-    headline_summary: str = Field(description="The hour in one breath: 1-2 sentences")
-    brief: list[str] = Field(
-        description="The 60-second brief: 3-7 bullets, one per development, each a single sentence"
+    subject_line: Plain = Field(description="Email subject: the 1-2 biggest items, under 90 characters")
+    headline_summary: Plain = Field(description="The hour in one breath: 1-2 sentences")
+    brief: list[Plain] = Field(
+        description="The 60-second brief: 1-7 bullets (fewer in a quiet hour), one per development, "
+        "each a single sentence"
     )
     stories: list[Story] = Field(description="Top stories, most important first")
     papers: list[Paper] = Field(description="Research papers worth knowing about, most important first")
-    radar: list[str] = Field(description="Smaller items worth a glance, one sentence each")
+    radar: list[RadarItem] = Field(description="Smaller items worth a glance, each with its source link")
     glossary: list[GlossaryTerm] = Field(description="Jargon used in this issue, explained")
     quiet_hour: bool = Field(description="True if nothing significant and new happened this hour")
 
@@ -91,7 +109,8 @@ PAPER_BG = "#f5efe5"
 CARD_BG = "#ffffff"
 RULE = "#e7ded1"
 IMPACT_COLORS = {"high": "#c0392b", "medium": "#d97706", "low": "#6b645c"}
-FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"
+# Repeated in every inline style, so kept short: Gmail clips messages over about 102 KB.
+FONT = "-apple-system,'Segoe UI',Roboto,Arial,sans-serif"
 
 
 def _e(text: str) -> str:
@@ -129,9 +148,10 @@ def _para(text: str, size: int = 15) -> str:
     return f'<p style="margin:0;font:400 {size}px/1.6 {FONT};color:{INK};">{_e(text)}</p>'
 
 
-def _bullets(items: list[str]) -> str:
+def _bullets(items: list[str], escape: bool = True) -> str:
     lis = "".join(
-        f'<li style="margin:0 0 6px 0;font:400 15px/1.55 {FONT};color:{INK};">{_e(i)}</li>' for i in items
+        f'<li style="margin:0 0 6px 0;font:400 15px/1.55 {FONT};color:{INK};">{_e(i) if escape else i}</li>'
+        for i in items
     )
     return f'<ul style="margin:0;padding:0 0 0 20px;">{lis}</ul>'
 
@@ -171,6 +191,11 @@ def _story_html(index: int, story: Story) -> str:
         + (_label("Sources") + f'<p style="margin:0;font:400 13px/1.6 {FONT};">{sources}</p>' if sources else "")
     )
     return _card(inner)
+
+
+def _radar_html(item: RadarItem) -> str:
+    safe = _safe_url(item.url)
+    return _e(item.text) + (" " + _link("Source", safe) if safe else "")
 
 
 def _paper_html(paper: Paper) -> str:
@@ -217,12 +242,12 @@ def render_html(issue: Newsletter, meta: IssueMeta) -> str:
         rows.extend(_story_html(i, s) for i, s in enumerate(issue.stories, start=1))
 
     if issue.papers:
-        rows.append(_section_title("Research radar · papers explained"))
+        rows.append(_section_title("Papers, explained simply"))
         rows.extend(_paper_html(p) for p in issue.papers)
 
     if issue.radar:
         rows.append(_section_title("Also on the radar"))
-        rows.append(_card(_bullets(issue.radar)))
+        rows.append(_card(_bullets([_radar_html(r) for r in issue.radar], escape=False)))
 
     if issue.glossary:
         rows.append(_section_title("Jargon buster"))
@@ -282,7 +307,7 @@ def render_text(issue: Newsletter, meta: IssueMeta) -> str:
             ]
         out.append("")
     if issue.papers:
-        out.append("RESEARCH RADAR")
+        out.append("PAPERS, EXPLAINED SIMPLY")
         for p in issue.papers:
             out += [
                 "",
@@ -298,7 +323,7 @@ def render_text(issue: Newsletter, meta: IssueMeta) -> str:
             ]
         out.append("")
     if issue.radar:
-        out += ["ALSO ON THE RADAR", *[f"• {r}" for r in issue.radar], ""]
+        out += ["ALSO ON THE RADAR", *[f"• {r.text} {_safe_url(r.url) or ''}".rstrip() for r in issue.radar], ""]
     if issue.glossary:
         out += ["JARGON BUSTER", *[f"{t.term}: {t.meaning}" for t in issue.glossary], ""]
     out.append(

@@ -35,7 +35,7 @@ class Settings:
     recipient: str = field(default_factory=lambda: _env("ALPHAONE_TO", "harkomal.design@gmail.com"))
     sender_name: str = "ALPHAONE"
 
-    # Claude
+    # Claude. The model must support effort and the web_*_20260209 tools (not Haiku 4.5).
     model: str = field(default_factory=lambda: _env("ALPHAONE_MODEL", "claude-opus-5-5"))
     research_effort: str = field(default_factory=lambda: _env("ALPHAONE_EFFORT", "high"))
     editor_effort: str = field(default_factory=lambda: _env("ALPHAONE_EDITOR_EFFORT", "medium"))
@@ -45,6 +45,7 @@ class Settings:
 
     # What counts as "new"
     lookback_hours: int = field(default_factory=lambda: _env_int("ALPHAONE_LOOKBACK_HOURS", 24))
+    paper_lookback_hours: int = field(default_factory=lambda: _env_int("ALPHAONE_PAPER_LOOKBACK_HOURS", 96))
     max_news_candidates: int = field(default_factory=lambda: _env_int("ALPHAONE_MAX_NEWS", 80))
     max_paper_candidates: int = field(default_factory=lambda: _env_int("ALPHAONE_MAX_PAPERS", 40))
 
@@ -55,6 +56,7 @@ class Settings:
     smtp_port: int = field(default_factory=lambda: _env_int("SMTP_PORT", 465))
     smtp_username: str = field(default_factory=lambda: _env("SMTP_USERNAME", ""))
     smtp_password: str = field(default_factory=lambda: _env("SMTP_PASSWORD", ""))
+    sender: str = field(default_factory=lambda: _env("ALPHAONE_FROM", ""))  # empty: send as SMTP_USERNAME
 
     # Files
     state_path: Path = field(

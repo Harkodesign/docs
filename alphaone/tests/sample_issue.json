@@ -45,7 +45,7 @@
     }
   ],
   "radar": [
-    "A fictional chipmaker announced a data-center GPU shipping next spring, promising 2x speed on AI workloads."
+    {"text": "A fictional chipmaker announced a data-center GPU shipping next spring, promising 2x speed on AI workloads.", "url": "https://example.com/news/gpu"}
   ],
   "glossary": [
     {"term": "Reasoning model", "meaning": "An AI model that works through a problem in steps before answering, which helps on maths, code and planning."},
