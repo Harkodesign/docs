@@ -1,0 +1,6 @@
+# Pinned to the versions the tests ran with, so an hourly job never picks up an untested release.
+anthropic==1.11.0
+feedparser==6.0.14
+pydantic==2.13.5
+# Time zone data for zoneinfo on systems without it (Windows); unused on Linux.
+tzdata==2026.5

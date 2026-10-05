@@ -1,0 +1,56 @@
+{
+  "subject_line": "SAMPLE: Example Labs ships a faster reasoning model; a new paper shrinks AI memory use",
+  "headline_summary": "SAMPLE PREVIEW - fictional content that shows the layout. A made-up lab launched a cheaper reasoning model, and a made-up paper shows how to cut a model's memory use by 4x with little loss in quality.",
+  "brief": [
+    "Example Labs released Nova-2, a reasoning model it says is 40% cheaper than its last one.",
+    "A paper from Sample University compresses a model's working memory 4x while keeping 98% of its accuracy.",
+    "A fictional chipmaker announced a new data-center GPU shipping next spring."
+  ],
+  "stories": [
+    {
+      "headline": "Example Labs launches Nova-2, a cheaper reasoning model",
+      "company": "Example Labs",
+      "category": "Model launch",
+      "impact": "high",
+      "one_liner": "A (fictional) lab's new model thinks through hard problems step by step at a lower price than its predecessor.",
+      "what_happened": "Example Labs released Nova-2 today to all paying customers. It costs $2 per million input tokens, down from $3.30, and scores 12 points higher on a maths benchmark.",
+      "why_it_matters": "Cheaper reasoning models make step-by-step AI practical for everyday tasks like checking spreadsheets or planning trips, and put pressure on rivals to cut prices.",
+      "details": [
+        "Available today in the Example Labs app and API; free tier gets limited access.",
+        "Context window of 500,000 tokens - roughly a 1,000-page book.",
+        "The lab says the model makes fewer factual errors, but published only its own tests.",
+        "Competitors released similar models in the past two months, so the price cut is the real story."
+      ],
+      "what_to_watch": "Whether independent benchmarks confirm the lab's accuracy claims over the next week.",
+      "sources": [
+        {"title": "Example Labs blog: Introducing Nova-2", "url": "https://example.com/blog/nova-2"},
+        {"title": "Example Tech News coverage", "url": "https://example.org/nova-2-review"}
+      ]
+    }
+  ],
+  "papers": [
+    {
+      "title": "Squeeze: Compressing the KV Cache Without Losing the Plot",
+      "authors_or_lab": "Sample University (fictional)",
+      "url": "https://example.com/papers/squeeze",
+      "one_liner": "A way to make AI models remember long conversations using a quarter of the memory.",
+      "the_problem": "Language models keep a running memory (the KV cache) of everything in a conversation, and it grows so large that long chats become slow and expensive.",
+      "the_big_idea": "Like a student who keeps short notes instead of a word-for-word transcript of a lecture, the method keeps compact summaries of older parts of the conversation and full detail only for the recent and important parts.",
+      "key_results": [
+        "4x less memory with 98% of the original accuracy on long-document questions.",
+        "Responses arrive 2.1x faster on long inputs."
+      ],
+      "why_it_matters": "Cheaper memory means longer conversations and documents on the same hardware, which lowers costs for everyone.",
+      "caveats": "Tested only on mid-sized open models; it is unclear how well it works on the largest commercial ones."
+    }
+  ],
+  "radar": [
+    {"text": "A fictional chipmaker announced a data-center GPU shipping next spring, promising 2x speed on AI workloads.", "url": "https://example.com/news/gpu"}
+  ],
+  "glossary": [
+    {"term": "Reasoning model", "meaning": "An AI model that works through a problem in steps before answering, which helps on maths, code and planning."},
+    {"term": "Token", "meaning": "A chunk of text, about three-quarters of a word, used to measure how much an AI reads and writes."},
+    {"term": "KV cache", "meaning": "The model's short-term memory of the conversation so far."}
+  ],
+  "quiet_hour": false
+}
